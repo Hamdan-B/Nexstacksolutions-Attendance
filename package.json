@@ -44,6 +44,14 @@
       "signAndEditExecutable": false,
       "artifactName": "NexStackSolutions-Setup-${version}.${ext}"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Hamdan-B",
+        "repo": "Nexstacksolutions-Attendance",
+        "releaseType": "release"
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "perMachine": false,
