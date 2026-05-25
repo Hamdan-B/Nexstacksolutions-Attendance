@@ -1,0 +1,10 @@
+export const PKT_TIME_ZONE = 'Asia/Karachi';
+export const SHIFT_START = '22:00';
+export const SHIFT_END = '06:00';
+export const LATE_THRESHOLD = '22:15';
+export const ATTENDANCE_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
+export const SYNC_INTERVAL_MS = 60 * 1000;
+export const INTERNET_TIME_URL = 'https://worldtimeapi.org/api/timezone/Asia/Karachi';
+export const TRUSTED_DRIFT_LIMIT_MINUTES = 5;
+export const APP_NAME = 'NexStackSolutions';
+export const CENTRAL_ACTIVATION_CODE = 'NEXSTACK-CENTRAL-742918';

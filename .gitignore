@@ -1,0 +1,13 @@
+node_modules/
+dist/
+release/
+coverage/
+.vite/
+*.log
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.env
+attendance-497219-5639b795c42f.json
+google-service-account.json
+attendance-google-service-account.json

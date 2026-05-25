@@ -1,0 +1,90 @@
+{
+  "name": "nexstacksolutions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NexStackSolutions Attendance Management desktop portal for Windows.",
+  "main": "dist/main/main/main.js",
+  "author": "NexStackSolutions",
+  "license": "UNLICENSED",
+  "packageManager": "npm@10.8.2",
+  "scripts": {
+    "dev": "concurrently -k -n TYPECHECK,VITE,ELECTRON \"npm:dev:main\" \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:main": "cross-env NODE_OPTIONS=--max-old-space-size=4096 tsc -p tsconfig.main.json --watch --preserveWatchOutput",
+    "dev:renderer": "vite build --watch --emptyOutDir false",
+    "dev:electron": "wait-on dist/main/main.js dist/renderer/index.html && electron .",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build",
+    "build": "npm run build:main && npm run build:renderer && electron-builder",
+    "lint": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "preview": "vite preview",
+    "start": "electron ."
+  },
+  "build": {
+    "appId": "com.nexstacksolutions.attendance",
+    "productName": "NexStackSolutions",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "database/schema.sql",
+      "scripts/**"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "scripts/**"
+    ],
+    "win": {
+      "target": ["nsis"],
+      "requestedExecutionLevel": "highestAvailable",
+      "signAndEditExecutable": false,
+      "artifactName": "NexStackSolutions-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NexStackSolutions",
+      "runAfterFinish": true,
+      "include": "build/installer/installer.nsh"
+    }
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "electron-updater": "^6.3.9",
+    "express": "^4.21.2",
+    "googleapis": "^144.0.0",
+    "dotenv": "^16.1.4",
+    "jsonwebtoken": "^9.0.2",
+    "node-machine-id": "^1.1.12",
+    "sql.js": "^1.13.0",
+    "winston": "^3.17.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.15.21",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.4",
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^35.2.1",
+    "electron-builder": "^25.1.8",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.1.4",
+    "wait-on": "^8.0.3"
+  }
+}
