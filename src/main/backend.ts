@@ -45,6 +45,46 @@ interface ClientSetupRequest {
   centralPort?: number;
 }
 
+interface GoogleEmployeeRow {
+  employeeId: string;
+  employeeName: string;
+  role: string;
+  active: number;
+  sourceVersion: string;
+}
+
+function resolveJsonOrFileContent(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (trimmed.startsWith('{')) {
+    return trimmed;
+  }
+  if (fs.existsSync(trimmed)) {
+    return fs.readFileSync(trimmed, 'utf8').trim();
+  }
+  return trimmed;
+}
+
+function parseActiveCell(value: unknown): number {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) {
+    return 1;
+  }
+  if (['true', '1', 'yes', 'y', 'active'].includes(normalized)) {
+    return 1;
+  }
+  if (['false', '0', 'no', 'n', 'inactive'].includes(normalized)) {
+    return 0;
+  }
+  return 1;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 const BUNDLED_SPREADSHEET_ID = '1kz0NfIz3909f-7Wp0EWoZZnocqPg3KvbfetlOfSPI8w';
 
 export class NexStackBackend {
@@ -104,8 +144,15 @@ export class NexStackBackend {
     this.setupTray();
     this.beginSchedulers();
     this.registerAutoStart();
-    this.checkForUpdates();
     return this.port;
+  }
+
+  async checkForUpdatesAtStartup(): Promise<void> {
+    if (!app.isPackaged) {
+      return;
+    }
+    autoUpdater.logger = this.logger;
+    await autoUpdater.checkForUpdatesAndNotify();
   }
 
   getHealth(): SystemHealthSnapshot {
@@ -133,6 +180,13 @@ export class NexStackBackend {
   async login(payload: unknown): Promise<{ session: EmployeeRecord; status: AppStatus }> {
     const request = loginRequestSchema.parse(payload) as LoginRequest;
     let employee = this.store.getEmployee(request.employeeId);
+    if (!employee || !employee.active) {
+      const googleEmployee = await this.findEmployeeInGoogle(request.employeeId);
+      if (googleEmployee) {
+        this.store.seedEmployees([googleEmployee]);
+        employee = this.store.getEmployee(request.employeeId);
+      }
+    }
     if (!employee || !employee.active) {
       await this.bootstrapGoogleCache();
       await this.refreshRosterFromKnownCentrals();
@@ -489,29 +543,53 @@ export class NexStackBackend {
   }
 
   private async bootstrapGoogleCache(): Promise<void> {
+    const rows = await this.loadEmployeesFromGoogle();
+    if (rows.length > 0) {
+      this.store.seedEmployees(rows);
+    }
+  }
+
+  private async loadEmployeesFromGoogle(): Promise<GoogleEmployeeRow[]> {
     const client = this.getGoogleSheetsClient();
-    if (!client) return;
+    if (!client) return [];
     const { sheets, sheetId } = client;
     try {
       await this.ensureGoogleWorkbookStructure(sheets, sheetId);
-      const employeeResponse = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'Employees!A2:D' }).catch(() => ({ data: { values: [] } }));
-      const rows = (employeeResponse.data.values ?? []).filter((r) => {
+      let employeeValues: unknown[][] = [];
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const response = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'Employees!A2:D' });
+          employeeValues = (response.data.values ?? []) as unknown[][];
+          break;
+        } catch (error) {
+          if (attempt === 2) {
+            throw error;
+          }
+          await sleep(300 * (attempt + 1));
+        }
+      }
+      const rows = employeeValues.filter((r) => {
         const id = String(r[0] ?? '').trim();
         const name = String(r[1] ?? '').trim();
         return id.length > 0 && name.length > 0;
-      }).map((row) => ({
+      }).map((row: unknown[]) => ({
         employeeId: String(row[0] ?? '').trim(),
         employeeName: String(row[1] ?? '').trim(),
         role: String(row[2] ?? 'Employee'),
-        active: String(row[3] ?? 'TRUE').toUpperCase() === 'TRUE' ? 1 : 0,
+        active: parseActiveCell(row[3]),
         sourceVersion: 'google'
-      }));
-      if (rows.length > 0) {
-        this.store.seedEmployees(rows);
-      }
+      })) as GoogleEmployeeRow[];
+      return rows;
     } catch (error) {
       this.logger.warn('google_cache_bootstrap_failed', { error: error instanceof Error ? error.message : 'Unknown error' });
+      return [];
     }
+  }
+
+  private async findEmployeeInGoogle(employeeId: string): Promise<GoogleEmployeeRow | null> {
+    const rows = await this.loadEmployeesFromGoogle();
+    const normalized = employeeId.trim().toLowerCase();
+    return rows.find((row) => row.employeeId.trim().toLowerCase() === normalized) ?? null;
   }
 
   private getGoogleSheetsClient(): { sheets: ReturnType<typeof google.sheets>; sheetId: string } | null {
@@ -529,10 +607,17 @@ export class NexStackBackend {
           // fall through to other sources
         }
       }
+    } else {
+      try {
+        serviceAccountJson = resolveJsonOrFileContent(serviceAccountJson);
+      } catch {
+        // fall through to other sources
+      }
     }
 
     if (!serviceAccountJson) {
       const bundledCandidates = [
+        path.join(app.getPath('userData'), 'service-account.json'),
         path.join(app.getPath('userData'), 'google-service-account.json'),
         path.join(app.getPath('userData'), 'attendance-google-service-account.json'),
         path.join(process.cwd(), 'google-service-account.json')
@@ -546,6 +631,14 @@ export class NexStackBackend {
         } catch {
           // try next path
         }
+      }
+    }
+
+    if (serviceAccountJson) {
+      try {
+        serviceAccountJson = resolveJsonOrFileContent(serviceAccountJson);
+      } catch {
+        // keep original value for parse attempt below
       }
     }
 
@@ -891,7 +984,7 @@ export class NexStackBackend {
     const contextMenu = Menu.buildFromTemplate([
       { label: 'Open NexStackSolutions', click: () => this.mainWindow?.show() },
       { label: 'Sync Now', click: () => void this.syncNow() },
-      { label: 'Quit as Admin', click: () => this.quitWithUnlock() }
+      { label: 'Exit', click: () => this.quitApplication() }
     ]);
     this.tray.setContextMenu(contextMenu);
     this.tray.on('double-click', () => this.mainWindow?.show());
@@ -1125,19 +1218,14 @@ export class NexStackBackend {
     }
   }
 
-  private checkForUpdates(): void {
-    if (!app.isPackaged) {
-      return;
+  private quitApplication(): void {
+    const appWithQuitFlag = app as Electron.App & { isQuitting?: boolean };
+    appWithQuitFlag.isQuitting = true;
+    try {
+      this.tray?.destroy();
+    } catch {
+      // ignore tray cleanup failures during shutdown
     }
-    autoUpdater.logger = this.logger;
-    autoUpdater.checkForUpdatesAndNotify().catch((error) => this.logger.warn('update_check_failed', { error: error instanceof Error ? error.message : 'Unknown error' }));
-  }
-
-  private quitWithUnlock(): void {
-    if (!this.mainWindow) {
-      app.quit();
-      return;
-    }
-    this.mainWindow.webContents.send('admin:unlock-request');
+    app.quit();
   }
 }

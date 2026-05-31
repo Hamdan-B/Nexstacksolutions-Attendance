@@ -60,6 +60,31 @@ const backendReady = new Promise<number>((resolve) => {
   poll();
 });
 
+async function wait(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry<T>(url: string, init?: RequestInit, attempts = 5): Promise<T> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: { 'Content-Type': 'application/json' },
+        ...init
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(String((payload as { error?: string }).error ?? `Request failed with ${response.status}`));
+      }
+      return response.json() as Promise<T>;
+    } catch (error) {
+      lastError = error;
+      await wait(250 * (attempt + 1));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Backend request failed');
+}
+
 ipcRenderer.on('backend:port', (_event, port: number) => {
   backendPort = String(port);
   if (resolveBackendReady) {
@@ -83,15 +108,7 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   if (!port) {
     throw new Error('Backend is not ready yet');
   }
-  const response = await fetch(`http://127.0.0.1:${port}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...init
-  });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(String((payload as { error?: string }).error ?? `Request failed with ${response.status}`));
-  }
-  return response.json() as Promise<T>;
+  return fetchWithRetry<T>(`http://127.0.0.1:${port}${path}`, init);
 }
 
 contextBridge.exposeInMainWorld('nexStack', {

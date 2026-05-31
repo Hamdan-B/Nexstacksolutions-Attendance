@@ -42,7 +42,8 @@ export class NexStackStore {
   }
 
   getEmployee(employeeId: string): EmployeeRecord | null {
-    const row = this.db.prepare('SELECT * FROM EmployeeCache WHERE employeeId = ?').get(employeeId) as DatabaseRow | undefined;
+    const normalizedId = employeeId.trim();
+    const row = this.db.prepare('SELECT * FROM EmployeeCache WHERE employeeId = ? COLLATE NOCASE').get(normalizedId) as DatabaseRow | undefined;
     if (!row) {
       return null;
     }

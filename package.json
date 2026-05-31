@@ -1,6 +1,6 @@
 {
   "name": "nexstacksolutions",
-  "version": "1.0.0",
+  "version": "1.0.10",
   "private": true,
   "description": "NexStackSolutions Attendance Management desktop portal for Windows.",
   "main": "dist/main/main/main.js",
@@ -39,7 +39,9 @@
       "scripts/**"
     ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "requestedExecutionLevel": "highestAvailable",
       "signAndEditExecutable": false,
       "artifactName": "NexStackSolutions-Setup-${version}.${ext}"
@@ -64,11 +66,12 @@
     }
   },
   "dependencies": {
+    "better-sqlite3": "^12.10.0",
     "cors": "^2.8.5",
+    "dotenv": "^16.1.4",
     "electron-updater": "^6.3.9",
     "express": "^4.21.2",
     "googleapis": "^144.0.0",
-    "dotenv": "^16.1.4",
     "jsonwebtoken": "^9.0.2",
     "node-machine-id": "^1.1.12",
     "sql.js": "^1.13.0",
@@ -76,6 +79,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.1",
     "@types/jsonwebtoken": "^9.0.9",
